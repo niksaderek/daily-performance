@@ -1,9 +1,3 @@
-"""
-Multi-Day Performance Analysis Tool
-Analyzes all dates in the cumulative daily.xlsx file and tracks trends over time.
-Streamlit-compatible with interactive dashboard.
-"""
-
 import pandas as pd
 import numpy as np
 from datetime import datetime
@@ -92,7 +86,7 @@ def generate_dashboard(df):
             y=pub_perf['Net_Profit'],
             marker_color=colors_list,
             text=[f"${x:,.0f}" for x in pub_perf['Net_Profit']],
-            textposition='outside',
+            textposition='auto',
             hovertemplate=(
                 "<b>%{x}</b><br>"
                 "Profit: $%{y:,.0f}<br>"
@@ -103,10 +97,14 @@ def generate_dashboard(df):
             customdata=list(zip(pub_perf['ROI'], pub_perf['Conversion_Rate'], pub_perf['Margin']))
         )
     )
-    fig1.update_layout(yaxis_title='Net Profit ($)', xaxis_tickangle=-45)
+    fig1.update_layout(
+        yaxis_title='Net Profit ($)',
+        xaxis_tickangle=-45,
+        margin=dict(t=80, b=120, l=50, r=50)
+    )
+    fig1.update_xaxes(automargin=True)
+    fig1.update_yaxes(automargin=True)
     st.plotly_chart(fig1, use_container_width=True)
-    fig.update_xaxes(automargin=True)
-    fig.update_yaxes(automargin=True)
 
     # -----------------------------
     # Conversion Funnel
@@ -146,7 +144,7 @@ def generate_dashboard(df):
             name='Affiliate',
             marker_color='#4883aa',
             text=[f"${aff_profit:,.0f}"],
-            textposition='outside'
+            textposition='auto'
         )
     )
     fig3.add_trace(
@@ -156,10 +154,16 @@ def generate_dashboard(df):
             name='Internal',
             marker_color='#de5dd7',
             text=[f"${int_profit:,.0f}"],
-            textposition='outside'
+            textposition='auto'
         )
     )
-    fig3.update_layout(yaxis_title='Profit ($)', barmode='group')
+    fig3.update_layout(
+        yaxis_title='Profit ($)',
+        barmode='group',
+        margin=dict(t=80, b=120, l=50, r=50)
+    )
+    fig3.update_xaxes(automargin=True)
+    fig3.update_yaxes(automargin=True)
     st.plotly_chart(fig3, use_container_width=True)
 
     # -----------------------------
@@ -182,7 +186,7 @@ def generate_dashboard(df):
             name='Affiliate',
             marker_color='#4883aa',
             text=[f'{aff_roi:.1f}%', f'{aff_margin:.1f}%', f'{aff_conv:.1f}%'],
-            textposition='outside'
+            textposition='auto'
         )
     )
     fig4.add_trace(
@@ -192,16 +196,20 @@ def generate_dashboard(df):
             name='Internal',
             marker_color='#de5dd7',
             text=[f'{int_roi:.1f}%', f'{int_margin:.1f}%', f'{int_conv:.1f}%'],
-            textposition='outside'
+            textposition='auto'
         )
     )
-    fig4.update_layout(yaxis_title='Percentage (%)', barmode='group')
+    fig4.update_layout(
+        yaxis_title='Percentage (%)',
+        barmode='group',
+        margin=dict(t=80, b=120, l=50, r=50)
+    )
+    fig4.update_xaxes(automargin=True)
+    fig4.update_yaxes(automargin=True)
     st.plotly_chart(fig4, use_container_width=True)
-
 
 # -----------------------------
 # Streamlit app
 # -----------------------------
-
 df = load_and_standardize()
 generate_dashboard(df)
