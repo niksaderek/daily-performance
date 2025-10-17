@@ -609,9 +609,6 @@ if __name__ == '__main__':
     # Day-over-day comparison
     compare_with_previous(df)
 
-    # Generate PDF report silently
-    generate_pdf_report(df)
-
     # Generate interactive dashboard
     print('\nGenerating interactive visualizations...')
     generate_interactive_dashboard(df)
