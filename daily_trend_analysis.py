@@ -105,6 +105,8 @@ def generate_dashboard(df):
     )
     fig1.update_layout(yaxis_title='Net Profit ($)', xaxis_tickangle=-45)
     st.plotly_chart(fig1, use_container_width=True)
+    fig.update_xaxes(automargin=True)
+    fig.update_yaxes(automargin=True)
 
     # -----------------------------
     # Conversion Funnel
@@ -200,8 +202,6 @@ def generate_dashboard(df):
 # -----------------------------
 # Streamlit app
 # -----------------------------
-st.title("Multi-Day Performance Analysis Tool")
-st.write("Analyzes all dates in the cumulative daily.xlsx file and tracks trends over time.")
 
 df = load_and_standardize()
 generate_dashboard(df)
