@@ -8,9 +8,9 @@ import numpy as np
 from datetime import datetime
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-import webbrowser
-import os
+import streamlit as st
 
+# -------------------- Data Loading --------------------
 def load_and_standardize(filepath='daily.xlsx'):
     """Load Excel file and standardize column names."""
     df = pd.read_excel(filepath)
@@ -32,6 +32,7 @@ def load_and_standardize(filepath='daily.xlsx'):
     df.rename(columns=col_mapping, inplace=True)
     return df
 
+# -------------------- Summary Functions --------------------
 def get_date_summary(df):
     """Get summary of all dates in dataset."""
     dates = sorted(df['Date'].unique())
@@ -56,179 +57,57 @@ def get_date_summary(df):
 
     return pd.DataFrame(summary)
 
+# -------------------- Trend & Analysis --------------------
+def show_trend_summary(df):
+    date_summary = get_date_summary(df)
+
+    if len(date_summary) <= 1:
+        st.info("Not enough data for historical trend summary.")
+        return
+
+    st.subheader("Historical Trend Summary")
+    st.write(f"Data Range: {date_summary['Date'].min()} to {date_summary['Date'].max()} ({len(date_summary)} days)")
+    st.dataframe(date_summary)
+
+    if len(date_summary) >= 3:
+        st.subheader("3-Day Trends")
+        recent = date_summary.tail(3)
+        metrics_to_track = ['Spend', 'Revenue', 'Net_Profit', 'ROI', 'Conv_Rate', 'No_Connect_Pct']
+
+        trends = []
+        for metric in metrics_to_track:
+            values = recent[metric].values
+            if len(values) == 3:
+                trend = 'UP' if values[2] > values[1] > values[0] else 'DOWN' if values[2] < values[1] < values[0] else 'MIXED'
+                avg = values.mean()
+                trends.append(f"{metric}: {trend} (3-day avg: {avg:.2f})")
+        st.write("\n".join(trends))
+
 def analyze_latest_day(df):
-    """Detailed analysis of the most recent day."""
     latest_date = df['Date'].max()
     latest_data = df[df['Date'] == latest_date]
 
-    print('=' * 100)
-    print(f'DAILY PERFORMANCE REPORT - {latest_date} ({latest_data["Day"].iloc[0]})')
-    print('=' * 100)
-    print()
+    st.subheader(f"Daily Performance Report - {latest_date} ({latest_data['Day'].iloc[0]})")
 
-    # Overall metrics - simplified
-    print('>> OVERALL PERFORMANCE')
-    print()
     total_spend = latest_data["Spend"].sum()
     total_revenue = latest_data["Revenue"].sum()
     total_profit = latest_data["Net_Profit"].sum()
     overall_roi = (total_revenue / total_spend - 1) * 100 if total_spend > 0 else 0
     overall_margin = (total_profit / total_revenue * 100) if total_revenue > 0 else 0
+    conv_rate = (latest_data["Converted"].sum() / latest_data["Connected"].sum() * 100) if latest_data["Connected"].sum() > 0 else 0
 
-    print(f'  • {len(latest_data)} campaigns running')
-    print(f'  • ${total_spend:,.0f} spend -> ${total_revenue:,.0f} revenue')
-    print(f'  • ${total_profit:,.2f} net profit ({overall_roi:.2f}% ROI, {overall_margin:.2f}% margin)')
-    print(f'  • {(latest_data["Converted"].sum() / latest_data["Connected"].sum() * 100):.2f}% conversion rate (of connected calls)', end='')
-
-    conv_rate = (latest_data["Converted"].sum() / latest_data["Connected"].sum() * 100)
-    if conv_rate >= 40:
-        print(' (excellent!)')
-    elif conv_rate >= 25:
-        print(' (strong)')
-    elif conv_rate >= 15:
-        print(' (good)')
-    else:
-        print(' (needs improvement)')
-    print()
-
-    # Publisher performance with concentration analysis
-    pub_perf = latest_data.groupby('Media_Buyer').agg({
-        'Spend': 'sum',
-        'Revenue': 'sum',
-        'Net_Profit': 'sum',
-        'Conversion_Rate': 'mean',
-        'Incoming': 'sum',
-        'Connected': 'sum',
-        'Converted': 'sum'
-    }).round(2)
-    pub_perf['Campaigns'] = latest_data.groupby('Media_Buyer').size()
-    pub_perf['ROI'] = ((pub_perf['Revenue'] / pub_perf['Spend'] - 1) * 100).round(2)
-    pub_perf['Margin'] = ((pub_perf['Net_Profit'] / pub_perf['Revenue']) * 100).round(2)
-    pub_perf = pub_perf.sort_values('Net_Profit', ascending=False)
-
-    total_profit = latest_data['Net_Profit'].sum()
-    total_calls = latest_data['Incoming'].sum()
-
-    print('>> TOP PERFORMERS')
-    print()
-    top_5 = pub_perf.head(5)
-    top_5_profit = top_5['Net_Profit'].sum()
-    top_5_calls = top_5['Incoming'].sum()
-
-    for i, (publisher, row) in enumerate(top_5.iterrows(), 1):
-        profit_share = (row['Net_Profit'] / total_profit * 100)
-        print(f'  {i}. {publisher[:25]}: ${row["Net_Profit"]:,.0f} ({profit_share:.1f}% of total)')
-
-    print()
-    concentration_pct = top_5_profit/total_profit*100
-    print(f'  Top 5 combined: {concentration_pct:.1f}% of total profit')
-    if concentration_pct > 60:
-        print(f'  [!] High concentration - diversify publisher base')
-    print()
-
-    # Affiliate vs Internal comparison (exclude test accounts with <$50 spend)
-    non_test_data = latest_data[latest_data['Spend'] > 50]
-
-    if len(non_test_data) > 0:
-        print('>> AFFILIATE vs INTERNAL')
-        print()
-
-        # Split by Aff_Pub flag
-        affiliate = non_test_data[non_test_data['Aff_Pub'] == True]
-        internal = non_test_data[non_test_data['Aff_Pub'] == False]
-
-        if len(affiliate) > 0:
-            aff_spend = affiliate['Spend'].sum()
-            aff_revenue = affiliate['Revenue'].sum()
-            aff_profit = affiliate['Net_Profit'].sum()
-            aff_roi = ((aff_revenue / aff_spend) - 1) * 100 if aff_spend > 0 else 0
-            aff_margin = (aff_profit / aff_revenue * 100) if aff_revenue > 0 else 0
-            aff_conv = (affiliate['Converted'].sum() / affiliate['Connected'].sum() * 100) if affiliate['Connected'].sum() > 0 else 0
-
-            print(f'  AFFILIATE PUBLISHERS ({len(affiliate)} campaigns):')
-            print(f'    Spend: ${aff_spend:,.0f} | Revenue: ${aff_revenue:,.0f} | Profit: ${aff_profit:,.0f}')
-            print(f'    ROI: {aff_roi:.2f}% | Margin: {aff_margin:.2f}% | Conv Rate (of connected): {aff_conv:.2f}%')
-            print()
-
-        if len(internal) > 0:
-            int_spend = internal['Spend'].sum()
-            int_revenue = internal['Revenue'].sum()
-            int_profit = internal['Net_Profit'].sum()
-            int_roi = ((int_revenue / int_spend) - 1) * 100 if int_spend > 0 else 0
-            int_margin = (int_profit / int_revenue * 100) if int_revenue > 0 else 0
-            int_conv = (internal['Converted'].sum() / internal['Connected'].sum() * 100) if internal['Connected'].sum() > 0 else 0
-
-            print(f'  INTERNAL PUBLISHERS ({len(internal)} campaigns):')
-            print(f'    Spend: ${int_spend:,.0f} | Revenue: ${int_revenue:,.0f} | Profit: ${int_profit:,.0f}')
-            print(f'    ROI: {int_roi:.2f}% | Margin: {int_margin:.2f}% | Conv Rate (of connected): {int_conv:.2f}%')
-            print()
-
-        # Comparison
-        if len(affiliate) > 0 and len(internal) > 0:
-            profit_diff = aff_profit - int_profit
-            roi_diff = aff_roi - int_roi
-            conv_diff = aff_conv - int_conv
-
-            print(f'  COMPARISON:')
-            if profit_diff > 0:
-                print(f'    [+] Affiliate leading by ${profit_diff:,.0f} profit')
-            else:
-                print(f'    [+] Internal leading by ${abs(profit_diff):,.0f} profit')
-
-            if roi_diff > 0:
-                print(f'    [+] Affiliate ROI +{roi_diff:.2f} percentage points higher')
-            else:
-                print(f'    [+] Internal ROI +{abs(roi_diff):.2f} percentage points higher')
-
-            if conv_diff > 0:
-                print(f'    [+] Affiliate conversion +{conv_diff:.2f} percentage points higher')
-            else:
-                print(f'    [+] Internal conversion +{abs(conv_diff):.2f} percentage points higher')
-
-        print()
-
-    # Quality alerts - simplified (only campaigns with >$500 spend)
-    print('>> QUALITY ALERTS')
-    print()
-
-    significant_campaigns = latest_data[latest_data['Spend'] > 500]
-    neg_roi_all = significant_campaigns[significant_campaigns['ROI_Pct'] < 0]
-    low_conv = significant_campaigns[significant_campaigns['Conversion_Rate'] < 0.10]
-    high_no_connect = significant_campaigns[significant_campaigns['No_Connect_Pct'] > 0.50]
-
-    if len(neg_roi_all) > 0:
-        print(f'  [!] {len(neg_roi_all)} campaigns with negative ROI (>$500 spend):')
-        for _, row in neg_roi_all.iterrows():
-            print(f'      {row["Media_Buyer"]} - {row["Vertical"]}: ${row["Spend"]:,.0f} spend, {row["ROI_Pct"]:.1f}% ROI')
-        print()
-
-    if len(low_conv) > 0:
-        print(f'  [!] {len(low_conv)} campaigns with low conversion <10% (>$500 spend):')
-        for _, row in low_conv.iterrows():
-            print(f'      {row["Media_Buyer"]} - {row["Vertical"]}: {row["Conversion_Rate"]:.1%} conv rate')
-        print()
-
-    if len(high_no_connect) > 0:
-        print(f'  [!] {len(high_no_connect)} campaigns with high no-connect >50% (>$500 spend):')
-        for _, row in high_no_connect.iterrows():
-            print(f'      {row["Media_Buyer"]} - {row["Vertical"]}: {row["No_Connect_Pct"]:.1%} no-connect rate')
-        print()
-
-    if len(neg_roi_all) == 0 and len(low_conv) == 0 and len(high_no_connect) == 0:
-        print('  [OK] No major quality issues detected (campaigns >$500 spend)')
-        print()
-
-    print()
-    print('=' * 100)
+    st.markdown(f"""
+**Overall Metrics**  
+- {len(latest_data)} campaigns running  
+- Spend: ${total_spend:,.0f} → Revenue: ${total_revenue:,.0f}  
+- Net Profit: ${total_profit:,.2f} ({overall_roi:.2f}% ROI, {overall_margin:.2f}% Margin)  
+- Conversion Rate: {conv_rate:.2f}% (of connected calls)
+""")
 
 def compare_with_previous(df):
-    """Compare latest day with previous day."""
     dates = sorted(df['Date'].unique())
-
     if len(dates) < 2:
-        print('### DAY-OVER-DAY COMPARISON ###')
-        print('Not enough data yet - need at least 2 days for comparison')
-        print()
+        st.info("Not enough data for day-over-day comparison.")
         return
 
     latest_date = dates[-1]
@@ -237,13 +116,6 @@ def compare_with_previous(df):
     latest = df[df['Date'] == latest_date]
     previous = df[df['Date'] == previous_date]
 
-    print()
-    print('=' * 100)
-    print(f'DAY-OVER-DAY COMPARISON: {previous_date} vs {latest_date}')
-    print('=' * 100)
-    print()
-
-    # Overall changes
     metrics = {
         'Campaigns': (len(latest), len(previous)),
         'Spend': (latest['Spend'].sum(), previous['Spend'].sum()),
@@ -256,156 +128,17 @@ def compare_with_previous(df):
         'No-Connect %': (latest['No_Connect_Pct'].mean() * 100, previous['No_Connect_Pct'].mean() * 100)
     }
 
-    print('### OVERALL METRICS ###')
+    st.subheader(f"Day-over-Day Comparison: {previous_date} vs {latest_date}")
     for metric, (curr, prev) in metrics.items():
         change = curr - prev
         pct_change = (change / prev * 100) if prev != 0 else 0
+        st.write(f"{metric}: {curr} ({change:+.2f}, {pct_change:+.1f}%)")
 
-        if metric in ['Spend', 'Revenue', 'Net Profit']:
-            print(f'{metric}: ${curr:,.0f} (${change:+,.0f}, {pct_change:+.1f}%)')
-        elif 'Rate' in metric or '%' in metric:
-            print(f'{metric}: {curr:.2f}% ({change:+.2f} points)')
-        else:
-            print(f'{metric}: {curr:.0f} ({change:+.0f})')
-
-    print()
-
-    # Publisher changes
-    print('### PUBLISHER PERFORMANCE CHANGES ###')
-
-    latest_pubs = latest.groupby('Media_Buyer')['Net_Profit'].sum()
-    previous_pubs = previous.groupby('Media_Buyer')['Net_Profit'].sum()
-
-    all_pubs = set(latest_pubs.index) | set(previous_pubs.index)
-
-    changes = []
-    for pub in all_pubs:
-        curr_profit = latest_pubs.get(pub, 0)
-        prev_profit = previous_pubs.get(pub, 0)
-        change = curr_profit - prev_profit
-
-        if pub in latest_pubs.index and pub not in previous_pubs.index:
-            status = 'NEW'
-        elif pub not in latest_pubs.index and pub in previous_pubs.index:
-            status = 'INACTIVE'
-        else:
-            status = 'ACTIVE'
-
-        changes.append({
-            'Publisher': pub,
-            'Current': curr_profit,
-            'Previous': prev_profit,
-            'Change': change,
-            'Status': status
-        })
-
-    changes_df = pd.DataFrame(changes).sort_values('Change', ascending=False)
-
-    print('\nTop 5 Profit Gainers:')
-    for _, row in changes_df.head(5).iterrows():
-        if row['Status'] == 'NEW':
-            print(f'  {row["Publisher"]}: ${row["Current"]:,.2f} (NEW PUBLISHER)')
-        else:
-            print(f'  {row["Publisher"]}: ${row["Current"]:,.2f} ({row["Change"]:+,.2f})')
-
-    print('\nTop 5 Profit Decliners:')
-    for _, row in changes_df.tail(5).iterrows():
-        if row['Status'] == 'INACTIVE':
-            print(f'  {row["Publisher"]}: ${row["Previous"]:,.2f} -> INACTIVE TODAY')
-        else:
-            print(f'  {row["Publisher"]}: ${row["Current"]:,.2f} ({row["Change"]:+,.2f})')
-
-    print()
-
-def show_trend_summary(df):
-    """Show performance trends across all dates."""
-    date_summary = get_date_summary(df)
-
-    if len(date_summary) == 1:
-        return
-
-    print('=' * 100)
-    print('HISTORICAL TREND SUMMARY')
-    print('=' * 100)
-    print()
-
-    print(f'Data Range: {date_summary["Date"].min()} to {date_summary["Date"].max()} ({len(date_summary)} days)')
-    print()
-
-    print('### DAILY METRICS ###')
-    print(date_summary.to_string(index=False))
-    print()
-
-    # Calculate trends
-    if len(date_summary) >= 3:
-        print('### 3-DAY TRENDS ###')
-        recent = date_summary.tail(3)
-
-        metrics_to_track = ['Spend', 'Revenue', 'Net_Profit', 'ROI', 'Conv_Rate', 'No_Connect_Pct']
-
-        for metric in metrics_to_track:
-            values = recent[metric].values
-            if len(values) == 3:
-                trend = 'UP' if values[2] > values[1] > values[0] else 'DOWN' if values[2] < values[1] < values[0] else 'MIXED'
-                avg = values.mean()
-                print(f'{metric}: {trend} (3-day avg: {avg:.2f})')
-
-        print()
-
-def identify_new_campaigns(df):
-    """Find campaigns that appeared in latest day but not in previous days."""
-    dates = sorted(df['Date'].unique())
-
-    if len(dates) < 2:
-        return
-
-    latest_date = dates[-1]
-    previous_dates = dates[:-1]
-
-    latest = df[df['Date'] == latest_date]
-    historical = df[df['Date'].isin(previous_dates)]
-
-    # Identify new buyer-vertical-source combinations
-    latest_combos = set(zip(latest['Media_Buyer'], latest['Vertical'], latest['Traffic_Source']))
-    historical_combos = set(zip(historical['Media_Buyer'], historical['Vertical'], historical['Traffic_Source']))
-
-    new_combos = latest_combos - historical_combos
-
-    if len(new_combos) == 0:
-        return
-
-    print('=' * 100)
-    print(f'NEW CAMPAIGN LAUNCHES ({latest_date})')
-    print('=' * 100)
-    print()
-
-    new_campaign_data = latest[latest.apply(lambda x: (x['Media_Buyer'], x['Vertical'], x['Traffic_Source']) in new_combos, axis=1)]
-
-    print(f'{len(new_campaign_data)} new campaign combinations detected:')
-    print()
-
-    for idx, row in new_campaign_data.iterrows():
-        # Calculate ROI correctly
-        campaign_roi = ((row['Revenue'] / row['Spend']) - 1) * 100 if row['Spend'] > 0 else 0
-
-        print(f'{row["Media_Buyer"]} - {row["Vertical"]} ({row["Traffic_Source"]})')
-        print(f'  Spend: ${row["Spend"]:,.0f} | Revenue: ${row["Revenue"]:,.0f} | Profit: ${row["Net_Profit"]:,.2f}')
-        print(f'  ROI: {campaign_roi:.2f}% | Conv Rate: {row["Conversion_Rate"]:.2%}')
-
-        # Early signal
-        if row['Conversion_Rate'] > 0.15 and campaign_roi > 20:
-            print('  [+] Strong Day 0 performance')
-        elif campaign_roi < 0:
-            print('  [-] Negative ROI on Day 0')
-
-        print()
-
-def generate_interactive_dashboard(df, filename='daily_performance_dashboard.html'):
-    """Generate an interactive HTML dashboard with visualizations."""
+# -------------------- Dashboard --------------------
+def generate_interactive_dashboard(df):
     latest_date = df['Date'].max()
     latest_data = df[df['Date'] == latest_date]
 
-    # Create subplots - 2 rows, 2 columns
     fig = make_subplots(
         rows=2, cols=2,
         subplot_titles=(
@@ -414,201 +147,97 @@ def generate_interactive_dashboard(df, filename='daily_performance_dashboard.htm
             'Affiliate vs Internal - Profit ($)',
             'Affiliate vs Internal - Performance Metrics (%)'
         ),
-        specs=[
-            [{"type": "bar"}, {"type": "funnel"}],
-            [{"type": "bar"}, {"type": "bar"}]
-        ],
+        specs=[[{"type": "bar"}, {"type": "funnel"}],
+               [{"type": "bar"}, {"type": "bar"}]],
         vertical_spacing=0.15,
         horizontal_spacing=0.12,
         row_heights=[0.5, 0.5]
     )
 
-    # === Chart 1: Top 10 Publishers ===
+    # Top 10 Publishers
     pub_perf = latest_data.groupby('Media_Buyer').agg({
         'Net_Profit': 'sum',
         'Revenue': 'sum',
         'Spend': 'sum',
         'Conversion_Rate': 'mean'
     }).round(2)
-    # Calculate ROI from aggregated Revenue/Spend (not from averaging ROI_Pct)
     pub_perf['ROI'] = ((pub_perf['Revenue'] / pub_perf['Spend'] - 1) * 100).round(2)
     pub_perf['Margin'] = ((pub_perf['Net_Profit'] / pub_perf['Revenue']) * 100).round(2)
-    pub_perf = pub_perf.sort_values('Net_Profit', ascending=False)
-
-    top_10 = pub_perf.head(10)
-
-    # Color bars: green for positive profit, red for negative
-    colors_list = ['#2ecc71' if x > 0 else '#e74c3c' for x in top_10['Net_Profit']]
+    pub_perf = pub_perf.sort_values('Net_Profit', ascending=False).head(10)
+    colors_list = ['#2ecc71' if x > 0 else '#e74c3c' for x in pub_perf['Net_Profit']]
 
     fig.add_trace(
         go.Bar(
-            x=top_10.index,
-            y=top_10['Net_Profit'],
+            x=pub_perf.index,
+            y=pub_perf['Net_Profit'],
             marker_color=colors_list,
-            text=[f'${x:,.0f}' for x in top_10['Net_Profit']],
+            text=[f'${x:,.0f}' for x in pub_perf['Net_Profit']],
             textposition='outside',
             name='Top 10 Profit',
             hovertemplate='<b>%{x}</b><br>Profit: $%{y:,.0f}<br>ROI: %{customdata[0]:.1f}%<br>Margin: %{customdata[2]:.1f}%<br>Conv Rate: %{customdata[1]:.1%}<extra></extra>',
-            customdata=list(zip(top_10['ROI'], top_10['Conversion_Rate'], top_10['Margin']))
+            customdata=list(zip(pub_perf['ROI'], pub_perf['Conversion_Rate'], pub_perf['Margin']))
         ),
         row=1, col=1
     )
 
-    # === Chart 2: Conversion Funnel ===
+    # Conversion Funnel
     total_incoming = latest_data['Incoming'].sum()
     total_connected = latest_data['Connected'].sum()
     total_converted = latest_data['Converted'].sum()
+    funnel = go.Funnel(
+        y=['Incoming', 'Connected', 'Converted'],
+        x=[total_incoming, total_connected, total_converted],
+        textinfo='value+percent initial'
+    )
+    fig.add_trace(funnel, row=1, col=2)
 
-    # Calculate rates
-    connect_rate = (total_connected / total_incoming * 100) if total_incoming > 0 else 0
-    conv_rate = (total_converted / total_connected * 100) if total_connected > 0 else 0
+    # Affiliate vs Internal Profit
+    affiliate = latest_data.groupby('Aff_Pub')['Net_Profit'].sum()
+    fig.add_trace(go.Bar(
+        x=affiliate.index,
+        y=affiliate.values,
+        text=[f'${x:,.0f}' for x in affiliate.values],
+        textposition='outside',
+        name='Affiliate/Internal Profit'
+    ), row=2, col=1)
 
+    # Affiliate vs Internal Performance %
+    affiliate_metrics = latest_data.groupby('Aff_Pub').agg({
+        'ROI_Pct': 'mean',
+        'Conversion_Rate': 'mean',
+        'Net_Profit': 'sum'
+    }).round(2)
     fig.add_trace(
-        go.Funnel(
-            name='Funnel',
-            y=['Incoming Calls', 'Connected', 'Converted'],
-            x=[total_incoming, total_connected, total_converted],
-            textposition='inside',
-            textinfo='value+percent initial',
-            marker=dict(color=['#3498db', '#2ecc71', '#f39c12']),
-            hovertemplate='<b>%{y}</b><br>Count: %{x:,.0f}<br>%{percentInitial}<extra></extra>'
+        go.Bar(
+            x=affiliate_metrics.index,
+            y=affiliate_metrics['ROI_Pct'],
+            name='ROI %',
+            text=[f'{x:.1f}%' for x in affiliate_metrics['ROI_Pct']],
+            textposition='outside'
         ),
-        row=1, col=2
+        row=2, col=2
+    )
+    fig.add_trace(
+        go.Bar(
+            x=affiliate_metrics.index,
+            y=affiliate_metrics['Conversion_Rate'],
+            name='Conv Rate %',
+            text=[f'{x:.1f}%' for x in affiliate_metrics['Conversion_Rate']],
+            textposition='outside'
+        ),
+        row=2, col=2
     )
 
-    # === Chart 3 & 4: Affiliate vs Internal ===
-    non_test_data = latest_data[latest_data['Spend'] > 50]
+    fig.update_layout(height=900, width=1200, title_text=f"Interactive Dashboard - {latest_date}", barmode='group')
+    
+    st.plotly_chart(fig, use_container_width=True)
 
-    affiliate = non_test_data[non_test_data['Aff_Pub'] == True]
-    internal = non_test_data[non_test_data['Aff_Pub'] == False]
+# -------------------- Streamlit App --------------------
+st.title("Daily Performance Analysis Dashboard")
 
-    # Calculate metrics
-    if len(affiliate) > 0:
-        aff_spend = affiliate['Spend'].sum()
-        aff_revenue = affiliate['Revenue'].sum()
-        aff_profit = affiliate['Net_Profit'].sum()
-        aff_roi = ((aff_revenue / aff_spend) - 1) * 100 if aff_spend > 0 else 0
-        aff_margin = (aff_profit / aff_revenue * 100) if aff_revenue > 0 else 0
-        aff_conv = (affiliate['Converted'].sum() / affiliate['Connected'].sum() * 100) if affiliate['Connected'].sum() > 0 else 0
-    else:
-        aff_profit = aff_roi = aff_margin = aff_conv = 0
+df = load_and_standardize('daily.xlsx')
 
-    if len(internal) > 0:
-        int_spend = internal['Spend'].sum()
-        int_revenue = internal['Revenue'].sum()
-        int_profit = internal['Net_Profit'].sum()
-        int_roi = ((int_revenue / int_spend) - 1) * 100 if int_spend > 0 else 0
-        int_margin = (int_profit / int_revenue * 100) if int_revenue > 0 else 0
-        int_conv = (internal['Converted'].sum() / internal['Connected'].sum() * 100) if internal['Connected'].sum() > 0 else 0
-    else:
-        int_profit = int_roi = int_margin = int_conv = 0
-
-    # Chart 3: Profit comparison (left, row 2)
-    if len(affiliate) > 0:
-        fig.add_trace(
-            go.Bar(
-                name='Affiliate',
-                x=['Profit'],
-                y=[aff_profit],
-                marker_color='#4883aa',
-                text=[f'${aff_profit:,.0f}'],
-                textposition='outside',
-                hovertemplate='<b>Affiliate</b><br>Profit: $%{y:,.0f}<extra></extra>',
-                showlegend=True
-            ),
-            row=2, col=1
-        )
-
-    if len(internal) > 0:
-        fig.add_trace(
-            go.Bar(
-                name='Internal',
-                x=['Profit'],
-                y=[int_profit],
-                marker_color='#de5dd7',
-                text=[f'${int_profit:,.0f}'],
-                textposition='outside',
-                hovertemplate='<b>Internal</b><br>Profit: $%{y:,.0f}<extra></extra>',
-                showlegend=True
-            ),
-            row=2, col=1
-        )
-
-    # Chart 4: Percentage metrics comparison (right, row 2)
-    pct_categories = ['ROI', 'Margin', 'Conv (connected)']
-
-    if len(affiliate) > 0:
-        fig.add_trace(
-            go.Bar(
-                name='Affiliate',
-                x=pct_categories,
-                y=[aff_roi, aff_margin, aff_conv],
-                marker_color="#4883aa",
-                text=[f'{aff_roi:.1f}%', f'{aff_margin:.1f}%', f'{aff_conv:.1f}%'],
-                textposition='outside',
-                hovertemplate='<b>Affiliate</b><br>%{x}: %{y:.2f}%<extra></extra>',
-                showlegend=False
-            ),
-            row=2, col=2
-        )
-
-    if len(internal) > 0:
-        fig.add_trace(
-            go.Bar(
-                name='Internal',
-                x=pct_categories,
-                y=[int_roi, int_margin, int_conv],
-                marker_color="#de5dd7",
-                text=[f'{int_roi:.1f}%', f'{int_margin:.1f}%', f'{int_conv:.1f}%'],
-                textposition='outside',
-                hovertemplate='<b>Internal</b><br>%{x}: %{y:.2f}%<extra></extra>',
-                showlegend=False
-            ),
-            row=2, col=2
-        )
-
-    # Update layout
-    fig.update_xaxes(tickangle=-45, row=1, col=1)
-    fig.update_xaxes(title_text='', row=2, col=1)
-    fig.update_xaxes(title_text='Metric', row=2, col=2)
-
-    fig.update_yaxes(title_text='Net Profit ($)', row=1, col=1)
-    fig.update_yaxes(title_text='Profit ($)', row=2, col=1)
-    fig.update_yaxes(title_text='Percentage (%)', row=2, col=2)
-
-    fig.update_layout(
-        title_text=f"Daily Performance Dashboard - {latest_date} ({latest_data['Day'].iloc[0]})",
-        title_font_size=24,
-        showlegend=True,
-        height=1000,
-        template='plotly_white',
-        barmode='group'
-    )
-
-    # Save and open
-    fig.write_html(filename)
-    print(f'\nInteractive dashboard saved: {filename}')
-
-    # Auto-open in browser
-    webbrowser.open('file://' + os.path.abspath(filename))
-
-    return filename
-
-if __name__ == '__main__':
-    print('Loading data from daily.xlsx...')
-    print()
-
-    df = load_and_standardize()
-
-    # Show trend summary first (if multiple days)
-    show_trend_summary(df)
-
-    # Latest day detailed analysis
-    analyze_latest_day(df)
-
-    # Day-over-day comparison
-    compare_with_previous(df)
-
-    # Generate interactive dashboard
-    print('\nGenerating interactive visualizations...')
-    generate_interactive_dashboard(df)
+show_trend_summary(df)
+analyze_latest_day(df)
+compare_with_previous(df)
+generate_interactive_dashboard(df)
