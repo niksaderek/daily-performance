@@ -1,3 +1,9 @@
+"""
+Daily Performance Dashboard Tool
+Analyzes all dates in the cumulative daily.xlsx file and tracks trends over time.
+Streamlit-compatible with interactive 2x2 dashboard.
+"""
+
 import pandas as pd
 import numpy as np
 from datetime import datetime
@@ -76,35 +82,23 @@ def generate_dashboard(df):
     pub_perf['ROI'] = ((pub_perf['Revenue'] / pub_perf['Spend'] - 1) * 100).round(2)
     pub_perf['Margin'] = ((pub_perf['Net_Profit'] / pub_perf['Revenue']) * 100).round(2)
     pub_perf = pub_perf.sort_values('Net_Profit', ascending=False).head(10)
-
     colors_list = ['#2ecc71' if x > 0 else '#e74c3c' for x in pub_perf['Net_Profit']]
 
-    fig1 = go.Figure()
-    fig1.add_trace(
-        go.Bar(
-            x=pub_perf.index,
-            y=pub_perf['Net_Profit'],
-            marker_color=colors_list,
-            text=[f"${x:,.0f}" for x in pub_perf['Net_Profit']],
-            textposition='auto',
-            hovertemplate=(
-                "<b>%{x}</b><br>"
-                "Profit: $%{y:,.0f}<br>"
-                "ROI: %{customdata[0]:.2f}%<br>"
-                "Conv Rate: %{customdata[1]:.2f}%<br>"
-                "Margin: %{customdata[2]:.2f}%<extra></extra>"
-            ),
-            customdata=list(zip(pub_perf['ROI'], pub_perf['Conversion_Rate'], pub_perf['Margin']))
-        )
+    fig1 = go.Bar(
+        x=pub_perf.index,
+        y=pub_perf['Net_Profit'],
+        marker_color=colors_list,
+        text=[f"${x:,.0f}" for x in pub_perf['Net_Profit']],
+        textposition='auto',
+        hovertemplate=(
+            "<b>%{x}</b><br>"
+            "Profit: $%{y:,.0f}<br>"
+            "ROI: %{customdata[0]:.2f}%<br>"
+            "Conv Rate: %{customdata[1]:.2f}%<br>"
+            "Margin: %{customdata[2]:.2f}%<extra></extra>"
+        ),
+        customdata=list(zip(pub_perf['ROI'], pub_perf['Conversion_Rate'], pub_perf['Margin']))
     )
-    fig1.update_layout(
-        yaxis_title='Net Profit ($)',
-        xaxis_tickangle=-45,
-        margin=dict(t=80, b=120, l=50, r=50)
-    )
-    fig1.update_xaxes(automargin=True)
-    fig1.update_yaxes(automargin=True)
-    st.plotly_chart(fig1, use_container_width=True)
 
     # -----------------------------
     # Conversion Funnel
@@ -113,18 +107,14 @@ def generate_dashboard(df):
     total_connected = latest_data['Connected'].sum()
     total_converted = latest_data['Converted'].sum()
 
-    fig2 = go.Figure()
-    fig2.add_trace(
-        go.Funnel(
-            y=['Incoming Calls', 'Connected', 'Converted'],
-            x=[total_incoming, total_connected, total_converted],
-            textposition='inside',
-            textinfo='value+percent initial',
-            marker=dict(color=['#3498db', '#2ecc71', '#f39c12']),
-            hovertemplate='<b>%{y}</b><br>Count: %{x:,.0f}<br>%{percentInitial}<extra></extra>'
-        )
+    fig2 = go.Funnel(
+        y=['Incoming Calls', 'Connected', 'Converted'],
+        x=[total_incoming, total_connected, total_converted],
+        textposition='inside',
+        textinfo='value+percent initial',
+        marker=dict(color=['#3498db', '#2ecc71', '#f39c12']),
+        hovertemplate='<b>%{y}</b><br>Count: %{x:,.0f}<br>%{percentInitial}<extra></extra>'
     )
-    st.plotly_chart(fig2, use_container_width=True)
 
     # -----------------------------
     # Affiliate vs Internal - Profit
@@ -136,35 +126,22 @@ def generate_dashboard(df):
     aff_profit = affiliate['Net_Profit'].sum() if len(affiliate) > 0 else 0
     int_profit = internal['Net_Profit'].sum() if len(internal) > 0 else 0
 
-    fig3 = go.Figure()
-    fig3.add_trace(
-        go.Bar(
-            x=['Profit'],
-            y=[aff_profit],
-            name='Affiliate',
-            marker_color='#4883aa',
-            text=[f"${aff_profit:,.0f}"],
-            textposition='auto'
-        )
+    fig3 = go.Bar(
+        x=['Profit'],
+        y=[aff_profit],
+        name='Affiliate',
+        marker_color='#4883aa',
+        text=[f"${aff_profit:,.0f}"],
+        textposition='auto'
     )
-    fig3.add_trace(
-        go.Bar(
-            x=['Profit'],
-            y=[int_profit],
-            name='Internal',
-            marker_color='#de5dd7',
-            text=[f"${int_profit:,.0f}"],
-            textposition='auto'
-        )
+    fig3_int = go.Bar(
+        x=['Profit'],
+        y=[int_profit],
+        name='Internal',
+        marker_color='#de5dd7',
+        text=[f"${int_profit:,.0f}"],
+        textposition='auto'
     )
-    fig3.update_layout(
-        yaxis_title='Profit ($)',
-        barmode='group',
-        margin=dict(t=80, b=120, l=50, r=50)
-    )
-    fig3.update_xaxes(automargin=True)
-    fig3.update_yaxes(automargin=True)
-    st.plotly_chart(fig3, use_container_width=True)
 
     # -----------------------------
     # Affiliate vs Internal - Percent Metrics
@@ -178,35 +155,52 @@ def generate_dashboard(df):
     int_margin = (internal['Net_Profit'].sum() / internal['Revenue'].sum() * 100) if len(internal) > 0 else 0
     int_conv = (internal['Converted'].sum() / internal['Connected'].sum() * 100) if len(internal) > 0 else 0
 
-    fig4 = go.Figure()
-    fig4.add_trace(
-        go.Bar(
-            x=pct_categories,
-            y=[aff_roi, aff_margin, aff_conv],
-            name='Affiliate',
-            marker_color='#4883aa',
-            text=[f'{aff_roi:.1f}%', f'{aff_margin:.1f}%', f'{aff_conv:.1f}%'],
-            textposition='auto'
-        )
+    fig4 = go.Bar(
+        x=pct_categories,
+        y=[aff_roi, aff_margin, aff_conv],
+        name='Affiliate',
+        marker_color='#4883aa',
+        text=[f'{aff_roi:.1f}%', f'{aff_margin:.1f}%', f'{aff_conv:.1f}%'],
+        textposition='auto'
     )
-    fig4.add_trace(
-        go.Bar(
-            x=pct_categories,
-            y=[int_roi, int_margin, int_conv],
-            name='Internal',
-            marker_color='#de5dd7',
-            text=[f'{int_roi:.1f}%', f'{int_margin:.1f}%', f'{int_conv:.1f}%'],
-            textposition='auto'
-        )
+    fig4_int = go.Bar(
+        x=pct_categories,
+        y=[int_roi, int_margin, int_conv],
+        name='Internal',
+        marker_color='#de5dd7',
+        text=[f'{int_roi:.1f}%', f'{int_margin:.1f}%', f'{int_conv:.1f}%'],
+        textposition='auto'
     )
-    fig4.update_layout(
-        yaxis_title='Percentage (%)',
-        barmode='group',
-        margin=dict(t=80, b=120, l=50, r=50)
+
+    # -----------------------------
+    # Combine all charts in 2x2 subplot
+    # -----------------------------
+    fig = make_subplots(
+        rows=2, cols=2,
+        subplot_titles=(
+            "Top 10 Publishers by Profit",
+            "Conversion Funnel",
+            "Profit: Affiliate vs Internal",
+            "Percent Metrics: Affiliate vs Internal"
+        ),
+        specs=[[{"type": "bar"}, {"type": "funnel"}],
+               [{"type": "bar"}, {"type": "bar"}]]
     )
-    fig4.update_xaxes(automargin=True)
-    fig4.update_yaxes(automargin=True)
-    st.plotly_chart(fig4, use_container_width=True)
+
+    fig.add_trace(fig1, row=1, col=1)
+    fig.add_trace(fig2, row=1, col=2)
+    fig.add_trace(fig3, row=2, col=1)
+    fig.add_trace(fig3_int, row=2, col=1)
+    fig.add_trace(fig4, row=2, col=2)
+    fig.add_trace(fig4_int, row=2, col=2)
+
+    fig.update_layout(
+        height=900, width=1200, showlegend=True, 
+        margin=dict(t=120, b=50, l=50, r=50),
+        legend=dict(x=1.05, y=1)
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
 
 # -----------------------------
 # Streamlit app
