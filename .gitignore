@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.streamlit/secrets.toml
+.DS_Store
+.vscode/
+.idea/
+
+# Raw exports carrying real partner identities never belong in version control.
+raw/
+daily_raw.xlsx
