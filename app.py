@@ -1,6 +1,7 @@
 # ABOUTME: Streamlit entry point for the daily performance dashboard, wiring sidebar
 # ABOUTME: filters through the metric aggregations and into the Plotly panels.
 
+import pandas as pd
 import streamlit as st
 
 from src.charts import (
@@ -14,6 +15,7 @@ from src.data import apply_filters, load_performance_data
 from src.metrics import (
     conversion_funnel,
     daily_summary,
+    weekly_summary,
     headline_kpis,
     publisher_leaderboard,
     segment_comparison,
@@ -35,13 +37,18 @@ def render_sidebar(df):
     """Collect the filter selections and return the narrowed frame."""
     st.sidebar.header("Filters")
 
-    dates = sorted(df["Date"].unique())
-    selected_dates = st.sidebar.multiselect(
-        "Dates",
-        options=dates,
-        default=dates,
-        format_func=lambda d: d.strftime("%b %d, %Y") if hasattr(d, "strftime") else str(d),
+    earliest = df["Date"].min().date()
+    latest = df["Date"].max().date()
+    selected_range = st.sidebar.date_input(
+        "Date range",
+        value=(earliest, latest),
+        min_value=earliest,
+        max_value=latest,
     )
+    # Streamlit returns a single date while the user is mid-way through picking a range.
+    if not isinstance(selected_range, tuple) or len(selected_range) != 2:
+        selected_range = (earliest, latest)
+
     selected_verticals = st.sidebar.multiselect(
         "Verticals", options=sorted(df["Vertical"].dropna().unique())
     )
@@ -61,7 +68,7 @@ def render_sidebar(df):
 
     return apply_filters(
         df,
-        dates=selected_dates,
+        date_range=selected_range,
         verticals=selected_verticals,
         sources=selected_sources,
         funded_only=funded_only,
@@ -96,8 +103,17 @@ def main():
     st.divider()
 
     summary = daily_summary(filtered)
-    st.subheader("Profit and ROI by day")
-    st.plotly_chart(profit_trend_chart(summary), use_container_width=True)
+
+    trend_header, grain_control = st.columns([3, 1])
+    trend_header.subheader("Profit and ROI over time")
+    weekly = grain_control.selectbox(
+        "Granularity", ["Daily", "Weekly"], index=1 if len(summary) > 45 else 0
+    ) == "Weekly"
+
+    trend = weekly_summary(summary) if weekly else summary
+    st.plotly_chart(profit_trend_chart(trend), use_container_width=True)
+    if weekly and trend.get("Partial", pd.Series(dtype=bool)).any():
+        st.caption("* Part-week at the edge of the selected range.")
 
     left, right = st.columns([3, 2])
     with left:

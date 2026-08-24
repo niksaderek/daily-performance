@@ -103,3 +103,44 @@ def segment_comparison(df):
         "Affiliate": _segment_metrics(df[df["Is_Affiliate"]]),
         "Internal": _segment_metrics(df[~df["Is_Affiliate"]]),
     }
+
+
+def weekly_summary(daily):
+    """Roll daily rows up into weeks, recomputing rates from the weekly totals."""
+    if daily.empty:
+        return daily
+
+    weeks = daily.copy()
+    weeks["_week_start"] = pd.to_datetime(weeks["Date"]) - pd.to_timedelta(
+        pd.to_datetime(weeks["Date"]).dt.weekday, unit="D"
+    )
+
+    rolled = weeks.groupby("_week_start", sort=True).agg(
+        Campaigns=("Campaigns", "sum"),
+        Spend=("Spend", "sum"),
+        Revenue=("Revenue", "sum"),
+        Net_Profit=("Net_Profit", "sum"),
+        Incoming=("Incoming", "sum"),
+        Connected=("Connected", "sum"),
+        Converted=("Converted", "sum"),
+        Days=("Date", "nunique"),
+    ).reset_index()
+
+    # Rates come from the week's totals; averaging daily percentages would weight a
+    # quiet Sunday the same as a heavy Tuesday.
+    rolled["ROI"] = rolled.apply(
+        lambda r: round(_ratio(r["Revenue"] - r["Spend"], r["Spend"]), 2), axis=1
+    )
+    rolled["Conv_Rate"] = rolled.apply(
+        lambda r: round(_ratio(r["Converted"], r["Connected"]), 2), axis=1
+    )
+    rolled["Date"] = rolled["_week_start"]
+    # A part-week at either end of the range totals less simply because it is shorter,
+    # so mark it rather than letting the short bar read as a downturn.
+    rolled["Label"] = [
+        start.strftime("Wk of %b %d") + ("*" if days < 7 else "")
+        for start, days in zip(rolled["_week_start"], rolled["Days"])
+    ]
+    rolled["Partial"] = rolled["Days"] < 7
+
+    return rolled.drop(columns=["_week_start"])

@@ -101,3 +101,72 @@ def test_daily_summary_provides_display_labels(frame):
     summary = daily_summary(frame)
 
     assert list(summary["Label"]) == ["Oct 15", "Oct 16"]
+
+
+def test_apply_filters_narrows_to_the_date_range():
+    from src.data import apply_filters
+
+    df = pd.DataFrame(
+        {
+            "Date": pd.to_datetime(["2025-10-01", "2025-10-05", "2025-10-10"]),
+            "Vertical": ["A", "A", "B"],
+            "Traffic_Source": ["G", "G", "F"],
+            "Spend": [100, 200, 300],
+            "Is_Funded": [True, True, True],
+        }
+    )
+
+    narrowed = apply_filters(df, date_range=("2025-10-04", "2025-10-08"))
+
+    assert list(narrowed["Spend"]) == [200]
+
+
+def test_weekly_summary_aggregates_days_into_weeks():
+    from src.metrics import weekly_summary
+
+    daily = pd.DataFrame(
+        {
+            "Date": pd.to_datetime(
+                ["2025-10-06", "2025-10-07", "2025-10-13", "2025-10-14"]
+            ),
+            "Label": ["Oct 06", "Oct 07", "Oct 13", "Oct 14"],
+            "Campaigns": [10, 10, 12, 12],
+            "Spend": [100, 200, 300, 400],
+            "Revenue": [150, 300, 450, 600],
+            "Net_Profit": [50.0, 100.0, 150.0, 200.0],
+            "ROI": [50.0, 50.0, 50.0, 50.0],
+            "Incoming": [20.0, 30.0, 40.0, 50.0],
+            "Connected": [10.0, 15.0, 20.0, 25.0],
+            "Converted": [5.0, 5.0, 10.0, 10.0],
+            "Conv_Rate": [50.0, 33.3, 50.0, 40.0],
+        }
+    )
+
+    weeks = weekly_summary(daily)
+
+    assert len(weeks) == 2
+    assert weeks.loc[0, "Spend"] == 300
+    assert weeks.loc[0, "Net_Profit"] == pytest.approx(150.0)
+    # ROI is recomputed from the week's totals, never averaged from the daily rates.
+    assert weeks.loc[0, "ROI"] == pytest.approx(50.0)
+    assert weeks.loc[1, "Conv_Rate"] == pytest.approx(20 / 45 * 100, abs=0.1)
+
+
+def test_weekly_summary_marks_partial_weeks():
+    from src.metrics import weekly_summary
+
+    daily = pd.DataFrame(
+        {
+            "Date": pd.to_datetime(["2025-10-11", "2025-10-12"]),
+            "Label": ["Oct 11", "Oct 12"],
+            "Campaigns": [10, 10],
+            "Spend": [100, 100], "Revenue": [150, 150], "Net_Profit": [50.0, 50.0],
+            "ROI": [50.0, 50.0], "Incoming": [20.0, 20.0],
+            "Connected": [10.0, 10.0], "Converted": [5.0, 5.0], "Conv_Rate": [50.0, 50.0],
+        }
+    )
+
+    weeks = weekly_summary(daily)
+
+    assert bool(weeks.loc[0, "Partial"]) is True
+    assert weeks.loc[0, "Label"].endswith("*")

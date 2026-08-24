@@ -38,11 +38,12 @@ def load_performance_data(path=DATA_PATH):
     return df.sort_values("Date").reset_index(drop=True)
 
 
-def apply_filters(df, dates=None, verticals=None, sources=None, funded_only=True):
+def apply_filters(df, date_range=None, verticals=None, sources=None, funded_only=True):
     """Narrow the frame to the selections made in the sidebar."""
     filtered = df
-    if dates:
-        filtered = filtered[filtered["Date"].isin(dates)]
+    if date_range:
+        start, end = date_range
+        filtered = filtered[filtered["Date"].between(pd.Timestamp(start), pd.Timestamp(end))]
     if verticals:
         filtered = filtered[filtered["Vertical"].isin(verticals)]
     if sources:
