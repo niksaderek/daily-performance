@@ -5,7 +5,9 @@ daily spreadsheet export into the answer buyers actually need each morning: whic
 buyers made money yesterday, where calls fell out of the funnel, and whether affiliate
 traffic outperformed traffic bought in house.
 
-![Dashboard overview](docs/dashboard.png)
+**[Open the live dashboard](https://daily-performance-demo.streamlit.app/)**
+
+[![Dashboard overview](docs/dashboard.png)](https://daily-performance-demo.streamlit.app/)
 
 ## The problem
 
@@ -66,6 +68,9 @@ the workbook combines two observed days with 90 days of synthetic history genera
 [`scripts/generate_history.py`](scripts/generate_history.py).
 
 ## Running it locally
+
+The [live demo](https://daily-performance-demo.streamlit.app/) needs no setup. To run it
+yourself:
 
 ```bash
 git clone https://github.com/niksaderek/daily-performance.git
